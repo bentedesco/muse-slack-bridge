@@ -35,7 +35,15 @@ def test_records_thread_broadcast() -> None:
 
 def test_skips_other_subtypes() -> None:
     assert should_record(_msg(subtype="message_changed"), WATCH, OWN, OWN_USER) is False
-    assert should_record(_msg(subtype="bot_message", bot_id="B999"), WATCH, OWN, OWN_USER) is False
+    assert should_record(_msg(subtype="message_deleted"), WATCH, OWN, OWN_USER) is False
+
+
+def test_records_other_bots_bot_message() -> None:
+    assert should_record(_msg(subtype="bot_message", bot_id="B9999999999", user="U8888888888"), WATCH, OWN, OWN_USER) is True
+
+
+def test_skips_own_bot_message() -> None:
+    assert should_record(_msg(subtype="bot_message", bot_id=OWN), WATCH, OWN, OWN_USER) is False
 
 
 def test_skips_unwatched_channel() -> None:

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
-ALLOWED_SUBTYPES = {None, "thread_broadcast"}
+ALLOWED_SUBTYPES = {None, "thread_broadcast", "bot_message"}
 
 
 def utc_now_iso() -> str:
@@ -21,7 +21,7 @@ def should_record(
     own_bot_id: Optional[str] = None,
     own_user_id: Optional[str] = None,
 ) -> bool:
-    """Keep user messages (and thread broadcasts) in watched channels only."""
+    """Keep watched-channel messages, including other bots; skip our own posts."""
     if event.get("type") != "message":
         return False
     if event.get("channel") not in watch_channels:

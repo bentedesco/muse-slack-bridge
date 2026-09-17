@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,23 @@ def test_partial_last_line_is_not_consumed(tmp_path: Path) -> None:
     events.write_text('{"text":"ok"}\n{"text":', encoding="utf-8")
     seen = list(iter_new_events(events, -1))
     assert [item[1]["text"] for item in seen] == ["ok"]
+
+
+def test_corrupt_complete_line_is_skipped_and_offset_can_advance(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    events = tmp_path / "events.jsonl"
+    offset = tmp_path / "bot.offset"
+    events.write_text('{"text":"ok"}\nNOT JSON\n{"text":"after"}\n', encoding="utf-8")
+    with caplog.at_level(logging.WARNING, logger="muse_slack_bridge.consumer"):
+        seen = list(iter_new_events(events, -1))
+    assert seen[0][1]["text"] == "ok"
+    assert seen[1] == (1, None)
+    assert seen[2][1]["text"] == "after"
+    assert "corrupt" in caplog.text.lower()
+    write_offset(offset, seen[1][0])
+    remaining = list(iter_new_events(events, read_offset(offset)))
+    assert [item[1]["text"] for item in remaining] == ["after"]
 
 
 def test_offset_path_rejects_unsafe_names(tmp_path: Path) -> None:

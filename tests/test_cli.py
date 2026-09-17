@@ -80,3 +80,29 @@ def test_example_consumer_once_advances_offset(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "hello" in result.stdout
     assert (tmp_path / "demo.offset").read_text(encoding="utf-8").strip() == "0"
+
+
+def test_example_consumer_skips_corrupt_line_and_keeps_going(tmp_path: Path) -> None:
+    events = tmp_path / "events.jsonl"
+    events.write_text('{"text":"ok","channel":"C1"}\nNOT JSON\n{"text":"after","channel":"C1"}\n', encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "example_consumer.py"),
+            "--name",
+            "demo",
+            "--config-dir",
+            str(tmp_path),
+            "--events",
+            str(events),
+            "--once",
+            "--dry-run",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "ok" in result.stdout
+    assert "after" in result.stdout
+    assert (tmp_path / "demo.offset").read_text(encoding="utf-8").strip() == "2"

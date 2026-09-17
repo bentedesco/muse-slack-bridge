@@ -14,3 +14,6 @@ build/
 !.env.example
 *.log
 .DS_Store
+events.jsonl
+*.offset
+*.offset.tmp

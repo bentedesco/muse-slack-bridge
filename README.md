@@ -27,7 +27,7 @@ muse_slack_bridge/     # library used by the scripts
 4. **OAuth & Permissions** → **Install to Workspace**. Copy the bot token (`xoxb-`).
 5. Invite the app to every channel it should see (`/invite @Muse Bridge`). Private channels are invisible until invited.
 
-The committed manifest enables Socket Mode and subscribes to public channels, private channels, DMs, and group DMs. It does not include a request URL.
+The committed manifest enables Socket Mode and subscribes to `message.groups` only (`chat:write`, `groups:history`, `groups:read`, `users:read`). Invite the app into each private channel it should see. It does not include a request URL or interactivity.
 
 ## Configure
 
@@ -60,7 +60,7 @@ chmod 600 ~/.config/muse-slack-bridge/app_token ~/.config/muse-slack-bridge/bot_
 | Event log | `MUSE_SLACK_BRIDGE_EVENTS` | `events.jsonl` | created automatically |
 | Default post channel | `SLACK_DEFAULT_CHANNEL` | — | optional; otherwise first watch channel |
 
-Use Slack channel IDs (`C…`, `G…`, `D…`), not `#names`. There is no hardcoded workspace or channel.
+Use Slack channel IDs (`C…` or `G…`), not `#names`. There is no hardcoded workspace or channel.
 
 Env vars win over files. If a token file is used, it must be mode `600`.
 
@@ -75,7 +75,7 @@ python3 slackd.py
 On each Socket Mode envelope the listener:
 
 1. Acknowledges immediately.
-2. Keeps `message` events whose channel is watched and whose subtype is empty or `thread_broadcast`.
+2. Keeps `message` events whose channel is watched and whose subtype is empty, `thread_broadcast`, or `bot_message` (so other bots' posts are visible).
 3. Drops its own posts (`auth.test` bot id / user id) so a reply cannot re-trigger the log.
 4. Appends one JSON line to `events.jsonl` and fsyncs.
 
@@ -102,7 +102,7 @@ Each bot owns its loop and its offset file. Offsets are never shared.
 ~/.config/muse-slack-bridge/<bot-name>.offset
 ```
 
-The offset is the last processed **line index**. A missing file is treated as `-1`, so the first log line is not skipped.
+The offset is the last processed **line index**. A missing file is treated as `-1`, so the first log line is not skipped. A complete line that is not valid JSON yields `None` and is logged so the offset can still advance; a truncated last line is left for the next read.
 
 ```python
 from muse_slack_bridge.consumer import iter_new_events, offset_path, read_offset, write_offset
@@ -110,7 +110,8 @@ from muse_slack_bridge.consumer import iter_new_events, offset_path, read_offset
 offset_file = offset_path(config_dir, "my-bot")
 last = read_offset(offset_file)
 for index, event in iter_new_events(events_path, last):
-    apply_this_bots_rules(event)
+    if event is not None:
+        apply_this_bots_rules(event)
     write_offset(offset_file, index)
 ```
 
@@ -150,7 +151,7 @@ Fallback when systemd is unavailable: `@reboot` plus a 5-minute cron calling `co
 
 - Tokens exist only in `~/.config/muse-slack-bridge/` (mode `600`) or process env. They are never logged and never stored in git.
 - If a token leaks, rotate it at [api.slack.com/apps](https://api.slack.com/apps) and rewrite the local files.
-- The app can only see channels it has been invited to, plus DMs it is part of.
+- The app can only see private channels it has been invited to.
 - No inbound HTTP listener is opened.
 
 ## Development

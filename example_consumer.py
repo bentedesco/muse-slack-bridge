@@ -77,9 +77,10 @@ def consume_once(args: argparse.Namespace, config_dir: Path, events_path: Path) 
     last = read_offset(path)
     processed = 0
     for index, event in iter_new_events(events_path, last):
-        payload = apply_bot_rules(event, args)
-        if payload and not args.dry_run:
-            post_via_cli(payload, config_dir)
+        if event is not None:
+            payload = apply_bot_rules(event, args)
+            if payload and not args.dry_run:
+                post_via_cli(payload, config_dir)
         last = index
         write_offset(path, last)
         processed += 1
