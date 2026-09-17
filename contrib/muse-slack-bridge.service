@@ -1,0 +1,14 @@
+[Unit]
+Description=Muse Slack Bridge listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/muse-slack-bridge
+ExecStart=/usr/bin/python3 %h/muse-slack-bridge/slackd.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
