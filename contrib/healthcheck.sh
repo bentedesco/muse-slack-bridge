@@ -3,17 +3,10 @@
 # Suggested crontab:
 #   @reboot /path/to/muse-slack-bridge/contrib/healthcheck.sh
 #   */5 * * * * /path/to/muse-slack-bridge/contrib/healthcheck.sh
+#
+# Exit 0: listener is healthy or was restarted after a crash.
+# Exit 2: local config is invalid — do not retry until files are fixed.
+# Exit 3: Slack rejected auth — reissue tokens, then start slackd again.
 set -eu
-
-ROOT="${MUSE_SLACK_BRIDGE_ROOT:-$HOME/muse-slack-bridge}"
-CONFIG_DIR="${MUSE_SLACK_BRIDGE_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/muse-slack-bridge}"
-LOG="$CONFIG_DIR/slackd.log"
-
-if pgrep -f "[s]lackd.py" >/dev/null 2>&1; then
-  exit 0
-fi
-
-mkdir -p "$CONFIG_DIR"
-# Redirect only the listener's stderr/stdout. The listener never prints tokens.
-nohup /usr/bin/env python3 "$ROOT/slackd.py" >>"$LOG" 2>&1 &
-exit 0
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec /usr/bin/env python3 "$DIR/healthcheck.py"

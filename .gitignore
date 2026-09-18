@@ -17,3 +17,5 @@ build/
 events.jsonl
 *.offset
 *.offset.tmp
+status.json
+status.json.tmp

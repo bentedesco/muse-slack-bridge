@@ -68,7 +68,8 @@ Env vars win over files. If a token file is used, it must be mode `600`.
 
 ```bash
 python3 -m pip install -r requirements.txt
-python3 slackd.py --check-config
+python3 slackd.py --check-config   # local files only
+python3 slackd.py --probe          # auth.test + apps.connections.open
 python3 slackd.py
 ```
 
@@ -84,6 +85,16 @@ On each Socket Mode envelope the listener:
 ```
 
 Errors go to stderr. Token-shaped strings are redacted. The Slack SDK reconnects if the websocket drops.
+
+The listener probes Slack before staying up. If Slack rejects a token (`invalid_auth`, `token_revoked`, and similar), it writes `status.json`, prints the cause, and exits **3** so systemd/cron do not spin. Local config errors exit **2**. Unexpected errors exit **1** and may be restarted.
+
+`~/.config/muse-slack-bridge/status.json` (never commit it) looks like:
+
+```json
+{"state":"auth_rejected","updated_at":"2026-09-18T07:00:00Z","pid":123,"reason":"invalid_auth","detail":"Slack rejected a token. Reissue..."}
+```
+
+States: `listening`, `reconnecting`, `auth_rejected`, `config_error`, `probe_ok`, `stopped`, `error`.
 
 ## Post
 
@@ -136,7 +147,26 @@ systemctl --user daemon-reload
 systemctl --user enable --now muse-slack-bridge.service
 ```
 
-Fallback when systemd is unavailable: `@reboot` plus a 5-minute cron calling `contrib/healthcheck.sh`. That script starts `slackd.py` only if it is not already running.
+`Restart=on-failure` with `RestartPreventExitStatus=2 3` so a revoked token does not crash-loop.
+
+Fallback when systemd is unavailable: `@reboot` plus a 5-minute cron calling `contrib/healthcheck.sh`. That script:
+
+- leaves a healthy process alone
+- restarts a dead or stale process only after `slackd.py --probe` succeeds
+- **does not restart** after `auth_rejected` or `config_error` (exit 3 / 2)
+
+## Token runbook
+
+You cannot stop Slack from revoking or rotating a token. What you can do is replace the local copy in one step and avoid a restart loop.
+
+1. Confirm the app still exists, is installed, and **Socket Mode** is on at [api.slack.com/apps](https://api.slack.com/apps).
+2. **Basic Information → App-Level Tokens** → generate a token with `connections:write` (`xapp-`). This is the usual fix when the websocket dies at handshake.
+3. If `auth.test` also fails, **OAuth & Permissions → Install to Workspace** (or Reinstall) and copy the new `xoxb-` token.
+4. Write the new values into the same chmod-600 files (or env vars). Do not leave the old token in place.
+5. `python3 slackd.py --probe` then start `slackd.py` (or `systemctl --user start muse-slack-bridge.service`).
+6. Do not generate a new dashboard token without updating the local files — that is the usual way this outage happens.
+
+Never paste tokens into chat or git. Use whatever secure channel you already use for secrets.
 
 ## Verify
 
@@ -144,7 +174,7 @@ Fallback when systemd is unavailable: `@reboot` plus a 5-minute cron calling `co
 - `slack-post.py --text "PING"` is visible in the channel.
 - A `--thread-ts` reply lands in the same thread.
 - The bot's own posts do not appear again in the log.
-- Killing the network connection and restoring it does not require a manual restart (SDK reconnect; systemd `Restart=always` covers process death).
+- Killing the network connection and restoring it does not require a manual restart (SDK reconnect; systemd restarts unexpected exits, not auth/config failures).
 - Two consumers with separate offset files each process every new line once.
 
 ## Security

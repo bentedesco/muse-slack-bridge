@@ -40,8 +40,10 @@ def test_check_config_fails_without_channels(tmp_path: Path) -> None:
         text=True,
         check=False,
     )
-    assert result.returncode == 1
+    assert result.returncode == 2
     assert "channels" in result.stderr.lower()
+    status = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
+    assert status["state"] == "config_error"
 
 
 def test_example_consumer_once_advances_offset(tmp_path: Path) -> None:
